@@ -1,0 +1,8 @@
+* text=auto
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.cjs text eol=lf
+*.cs text eol=lf
+*.md text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol
+*.ppx text eol=crlf

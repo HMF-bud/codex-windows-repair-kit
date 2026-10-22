@@ -1,0 +1,9 @@
+/local/
+/dist/
+*.exe
+*.dll
+*.zip
+*.log
+*.jsonl
+.env
+node_modules/

@@ -1,0 +1,23 @@
+name: Windows source checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  source-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/normalize.test.cjs
+      - name: Parse PowerShell and compile native launcher
+        shell: powershell
+        run: |
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe /out:adapter\CodexPathAdapter.exe /reference:System.Web.Extensions.dll adapter\CodexPathAdapter.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }

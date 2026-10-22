@@ -1,0 +1,21 @@
+diff --git a/codex-rs/protocol/src/permissions.rs b/codex-rs/protocol/src/permissions.rs
+--- a/codex-rs/protocol/src/permissions.rs
++++ b/codex-rs/protocol/src/permissions.rs
+@@ -506,7 +506,16 @@ fn path_uri_from_raw(path: LegacyAppPathString) -> Result<PathUri, String> {
+ 
+ fn raw_path_from_uri(path: PathUri) -> Result<LegacyAppPathString, String> {
+     let raw_path = LegacyAppPathString::from(path.clone());
+-    if path_uri_from_raw(raw_path.clone()).as_ref() == Ok(&path) {
++    let lossless = path_uri_from_raw(raw_path.clone()).is_ok_and(|round_trip| {
++        round_trip == path
++            // Native Windows normalization removes a directory's trailing separator.
++            // Accept only that spelling difference; retain all other seam checks.
++            || (path.infer_path_convention() == Some(PathConvention::Windows)
++                && !path.is_opaque()
++                && PathUri::parse(path.to_string().trim_end_matches('/'))
++                    .is_ok_and(|normalized| normalized == round_trip))
++    });
++    if lossless {
+         Ok(raw_path)
+     } else {
+         Err("permission path cannot be represented losslessly".to_string())
