@@ -9,7 +9,7 @@
 
 ## 在另一台电脑使用
 
-1. 登录有权访问此私有仓库的 GitHub 账号，点击 **Code → Download ZIP**，解压到一个长期保留的本地目录，例如 `D:\Tools\codex-windows-repair-kit`。不要从 ZIP 内直接运行。
+1. 此仓库已公开，无需登录即可点击 **Code → Download ZIP**，或在 [发布页](https://github.com/HMF-bud/codex-windows-repair-kit/releases/latest) 下载版本包。解压到一个长期保留的本地目录，例如 `D:\Tools\codex-windows-repair-kit`。不要从 ZIP 内直接运行。早期 v0.1.0 包内说明中的“私有仓库需登录”已不适用，程序无需更改。
 2. 安装并打开过 **Windows Codex 桌面版**；映射好目标网络盘，默认 `R:`。需要 Node.js 18+：优先使用 PATH 中的 Node，也可检测 Codex 自带的 Node。
 3. **双击 `Install.cmd`**。脚本自动检测共享盘、原版后端和本机程序路径，编译本地入口，运行独立保存／重读及沙箱边界测试；通过后才写入当前用户的下一次启动设置。失败窗口会保留错误。
 4. 在方便时正常关闭并重新打开 Codex，再运行 `Diagnose.cmd` 检查真实接入。安装器不自动重启应用或停止实验；有未保存问答时先从界面导出备份。
