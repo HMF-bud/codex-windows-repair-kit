@@ -11,6 +11,7 @@
 
 1. `Diagnose.cmd` 中的 `mappingMatches` 应为 true。
 2. 正常启动 Codex 后，`lastRealActivation` 应有当前启动记录且 `isolatedHome=false`。历史激活日志或单纯进程存在不能证明当前会话成功保存。
+   同时确认主窗口正常，启动日志出现 `app_start outcome=success`，没有本次 `Desktop startup policy read failed`。`currentRuntime` 应能解析当前注册安装；`preparedAppVersion` 仅为旧快照，版本不同本身不等于故障。
 3. 在目标项目创建或使用自己允许测试的会话，发送：
 
    > 只回复“路径保存验收通过”，不要读取或修改文件，不调用工具。
@@ -23,6 +24,7 @@
 
 ## 失败时
 
+- “无法加载组织设置 / 应用已暂停”：先核对本次启动日志、实际入口和当前安装发现结果。可用 `Rollback.cmd` 恢复原生入口，再正常重新打开；不伪造策略结果、不绕过检查，不把该弹窗直接归因于网络或账号。回滚不会关闭当前进程或修改历史。
 - `MCP -32000`：保留时间窗和完整错误，先对比本地调用与 dot 调用。不能仅凭通用错误判断 DNS、权限或数据库原因。
 - 返回 `interrupted`、`items=[]`：说明本次读到的最新轮次为空。必要时只读较早轮次，明确其版本，不能称较早正文为最新答复。
 - `permission path cannot be represented losslessly`：核对适配器实际激活、映射和版本。先备份未保存正文，不反复操作原会话。

@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^[A-Za-z]:?$')][string]$Drive = 'R:',
-    [string]$BackendPath, [string]$NodePath,
     [ValidateRange(1,65535)][int]$ProxyPort = 7897,
     [string]$ProxifierPath,
     [switch]$PrepareOnly, [switch]$Rollback
@@ -30,36 +29,10 @@ if ($env:CODEX_WINDOWS_REGISTERED_CORE -eq '1') { throw 'Registered-core mode ha
 $Drive = $Drive.TrimEnd(':').ToUpperInvariant() + ':'
 $scope = Get-KitMapping $Drive
 if ($scope -notmatch '^\\\\[^\\/]+\\[^\\/]+$') { throw 'Only a mapped UNC share root is supported.' }
-$package = Get-AppxPackage -Name OpenAI.Codex | Select-Object -First 1
-if (-not $package) { throw 'Install and launch the Windows Codex desktop app first.' }
-$appPath = Join-Path $package.InstallLocation 'app\ChatGPT.exe'
-if (-not (Test-Path -LiteralPath $appPath)) { throw 'Unsupported Codex desktop package layout.' }
-if (-not $NodePath) {
-    $nodeCommand = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($nodeCommand) { $NodePath = $nodeCommand.Source }
-    else {
-        $bundled = @(Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\runtimes\cua_node\*\bin\node.exe') -ErrorAction SilentlyContinue)
-        if ($bundled.Count -eq 1) { $NodePath = $bundled[0].FullName }
-    }
-}
-if (-not $NodePath -or -not (Test-Path -LiteralPath $NodePath)) { throw 'Node.js 18+ required. Install Node.js LTS or pass -NodePath.' }
-& $NodePath -e "if(Number(process.versions.node.split('.')[0])<18)process.exit(1)"
-if ($LASTEXITCODE -ne 0) { throw 'Node.js 18+ required.' }
-if (-not $BackendPath) {
-    $candidates = @(Get-Process -Name codex -ErrorAction SilentlyContinue | ForEach-Object { $_.Path } | Where-Object { $_ } | Sort-Object -Unique)
-    if ($candidates.Count -eq 1) { $BackendPath = $candidates[0] }
-    elseif ($candidates.Count -gt 1) { throw 'Multiple Codex backends are running. Pass -BackendPath with the desktop backend.' }
-    else {
-        $existingLauncher = [Environment]::GetEnvironmentVariable('CODEX_CLI_PATH','User')
-        if ($existingLauncher) {
-            $oldConfig = Join-Path (Split-Path $existingLauncher) 'startup.json'
-            if (Test-Path -LiteralPath $oldConfig) { $BackendPath = (Get-Content -LiteralPath $oldConfig -Raw | ConvertFrom-Json).backendPath }
-        }
-    }
-}
-if (-not $BackendPath -or -not (Test-Path -LiteralPath $BackendPath) -or [IO.Path]::GetFileName($BackendPath) -ne 'codex.exe') {
-    throw 'Start Codex once or pass -BackendPath to its original codex.exe. Nothing changed.'
-}
+# Version/hash paths are snapshots only; every invocation resolves OS registration.
+$runtime = (& (Join-Path $PSScriptRoot 'adapter\Resolve-Runtime.ps1') -NeedNode) | ConvertFrom-Json
+$BackendPath = $runtime.backendPath
+$NodePath = $runtime.nodePath
 $backendVersion = (& $BackendPath --version | Out-String).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Original backend version check failed.' }
 if (-not $ProxifierPath) {
@@ -70,9 +43,11 @@ New-Item -ItemType Directory -Path $localDir -Force | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff')
 if (Test-Path -LiteralPath $configPath) { Copy-Item -LiteralPath $configPath -Destination (Join-Path $localDir "startup-before-$stamp.json") }
 $config = [ordered]@{
-    nodePath=$NodePath; backendPath=$BackendPath; appPath=$appPath
-    appVersion=[string]$package.Version; backendVersion=$backendVersion
-    sandboxPackageFamily=$package.PackageFamilyName; drive=$Drive; scope=$scope
+    nodePath=$NodePath; backendPath=$BackendPath; appPath=$runtime.appPath
+    appVersion=$runtime.appVersion; backendVersion=$backendVersion
+    packageRoot=$runtime.packageRoot; runtimeManifest=$runtime.runtimeManifest
+    runtimeArchiveVersion=$runtime.runtimeArchiveVersion; discovery=$runtime.discovery
+    sandboxPackageFamily=$runtime.sandboxPackageFamily; drive=$Drive; scope=$scope
     proxyPort=$ProxyPort; proxifierPath=$ProxifierPath
     preparedUTC=[DateTime]::UtcNow.ToString('o')
 }
@@ -83,9 +58,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Native adapter compilation failed.' }
 [xml]$profile = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'proxy\Codex-durable-DNS.ppx') -Raw
 $profile.ProxifierProfile.ProxyList.Proxy.Port = [string]$ProxyPort
 $profile.Save((Join-Path $localDir 'Codex-durable-DNS.ppx'))
-Write-Host 'Testing directory conversion, isolated save/reopen and sandbox boundaries...'
+Write-Host 'Testing entry passthrough, real policy reads, directory conversion, isolated save/reopen and sandbox boundaries...'
 & $NodePath (Join-Path $PSScriptRoot 'tests\normalize.test.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'Directory conversion test failed; startup setting was not changed.' }
+& $NodePath (Join-Path $PSScriptRoot 'tests\verify-entry.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'Entry and policy compatibility failed; startup setting was not changed. See local\checks.' }
 & $NodePath (Join-Path $PSScriptRoot 'tests\verify-install.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'Isolated validation failed; startup setting was not changed. See local\checks.' }
 if ($PrepareOnly) { Write-Host 'Prepared and verified. No startup or proxy setting changed.'; return }

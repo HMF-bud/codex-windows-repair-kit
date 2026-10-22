@@ -2,6 +2,9 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Common.ps1')
 $root = Split-Path $PSScriptRoot
 $config = Get-Content -LiteralPath (Join-Path $root 'local\startup.json') -Raw | ConvertFrom-Json
+$runtime = $null
+$runtimeError = $null
+try { $runtime = (& (Join-Path $root 'adapter\Resolve-Runtime.ps1') -NeedNode) | ConvertFrom-Json } catch { $runtimeError = $_.Exception.Message }
 $mapping = $null
 try { $mapping = Get-KitMapping $config.drive } catch { Write-Warning $_.Exception.Message }
 $log = Join-Path $root 'local\activation.jsonl'
@@ -16,7 +19,8 @@ $running = @(Get-Process -Name CodexPathAdapter -ErrorAction SilentlyContinue | 
     expectedShare=$config.scope; actualShare=$mapping; mappingMatches=($mapping -eq $config.scope)
     adapterProcessCount=$running.Count; lastRealActivation=$latest
     proxifierRunning=(@(Get-Process -Name Proxifier -ErrorAction SilentlyContinue).Count -gt 0)
-    originalBackendExists=(Test-Path -LiteralPath $config.backendPath)
-    configuredAppExists=(Test-Path -LiteralPath $config.appPath)
+    currentRuntime=$runtime; runtimeDiscoveryError=$runtimeError
+    preparedAppVersion=$config.appVersion
+    noteOnSnapshot='local/startup.json runtime paths are diagnostic snapshots, not launch targets.'
     note='Activation and process checks do not replace dot read_thread acceptance.'
 } | ConvertTo-Json -Depth 5
